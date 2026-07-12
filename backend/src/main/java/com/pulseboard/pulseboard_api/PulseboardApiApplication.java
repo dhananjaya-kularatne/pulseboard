@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class PulseboardApiApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(PulseboardApiApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(PulseboardApiApplication.class, args);
+    }
 }
