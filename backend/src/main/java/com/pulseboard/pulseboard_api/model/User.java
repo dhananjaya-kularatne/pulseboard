@@ -11,6 +11,10 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
+/*
+ - Represents an application user.
+ - Implements Spring Security's UserDetails so it can be used directly during authentication (email is used as the username).
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

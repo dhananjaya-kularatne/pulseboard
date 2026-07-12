@@ -2,6 +2,10 @@ package com.pulseboard.pulseboard_api.model;
 
 import lombok.Getter;
 
+/**
+ * Standard wrapper for all API responses.
+ * Ensures every endpoint returns a consistent shape: success flag, a human-readable message, and the actual payload (or null on error).
+ */
 @Getter
 public class ApiResponse<T> {
     private final boolean success;
