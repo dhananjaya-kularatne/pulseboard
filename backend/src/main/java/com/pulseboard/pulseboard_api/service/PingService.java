@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -33,7 +34,14 @@ public class PingService {
 
     private final MonitorRepository monitorRepository;
     private final PingResultRepository pingResultRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = createRestTemplateWithTimeouts();
+
+    private static RestTemplate createRestTemplateWithTimeouts() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5000); // 5 seconds to establish connection
+        factory.setReadTimeout(10000);   // 10 seconds to receive response
+        return new RestTemplate(factory);
+    }
 
     @Scheduled(fixedRate = 60000) // every 60 seconds
     public void pingAllActiveMonitors() {
