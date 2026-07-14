@@ -6,14 +6,12 @@ import { getMonitors, createMonitor, deleteMonitor } from '../api/monitorApi'
 const statusColors = {
   UP: 'bg-green-500',
   DOWN: 'bg-red-500',
-  UNKNOWN: 'bg-slate-500',
 }
 
 /**
- * Main dashboard, shown after login. Fetches the logged-in user's
- * monitors on mount, and provides a form to create new ones plus
- * a delete action per monitor. Status dot color reflects currentStatus
- * as last updated by the backend's scheduled PingService.
+ * Main dashboard, shown after login. Fetches the logged-in user's monitors on mount, and provides a form to create new ones plus
+ * a delete action per monitor. Status dot color reflects currentStatus as last updated by the backend's scheduled PingService. A legend clarifies what each 
+ * color means; UNKNOWN monitors show a "checking" indicator instead of an ambiguous dot color.
  */
 export default function DashboardPage() {
   const { user, token, logout } = useAuth()
@@ -92,7 +90,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <h2 className="text-lg font-medium text-slate-200">Your monitors</h2>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -100,6 +98,18 @@ export default function DashboardPage() {
         >
           {showForm ? 'Cancel' : '+ Add monitor'}
         </button>
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Up
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Down
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-500" /> Checking
+        </span>
       </div>
 
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
@@ -181,10 +191,14 @@ export default function DashboardPage() {
               className="bg-slate-800 rounded-lg p-4 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <span
-                  className={`w-3 h-3 rounded-full ${statusColors[monitor.currentStatus]}`}
-                  title={monitor.currentStatus}
-                />
+                {monitor.currentStatus === 'UNKNOWN' ? (
+                  <span className="text-slate-500 text-xs w-8">•••</span>
+                ) : (
+                  <span
+                    className={`w-3 h-3 rounded-full ${statusColors[monitor.currentStatus]}`}
+                    title={monitor.currentStatus}
+                  />
+                )}
                 <div>
                   <p className="font-medium">{monitor.name}</p>
                   <p className="text-slate-400 text-sm">{monitor.url}</p>
