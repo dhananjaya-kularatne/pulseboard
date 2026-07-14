@@ -51,4 +51,11 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("An unexpected error occurred: " + ex.getMessage()));
     }
+
+    @ExceptionHandler(MonitorNotFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMonitorNotFound(MonitorNotFoundException ex) {
+        return ResponseEntity
+            .status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.error(ex.getMessage()));
+}
 }
