@@ -1,8 +1,10 @@
 package com.pulseboard.pulseboard_api.service;
 
+import com.pulseboard.pulseboard_api.model.Incident;
 import com.pulseboard.pulseboard_api.model.Monitor;
 import com.pulseboard.pulseboard_api.model.MonitorStatus;
 import com.pulseboard.pulseboard_api.model.PingResult;
+import com.pulseboard.pulseboard_api.repository.IncidentRepository;
 import com.pulseboard.pulseboard_api.repository.MonitorRepository;
 import com.pulseboard.pulseboard_api.repository.PingResultRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,9 @@ import java.util.List;
  *
  * A monitor is marked DOWN after 3 consecutive failures, and back UP on the very next successful ping. This threshold avoids flapping
  * a monitor's status from a single transient network blip.
+ * 
+ Incident lifecycle: an Incident is created the moment a monitor transitions into DOWN, and auto-resolved the moment it transitions
+ * back to UP — so incidents always represent a real, threshold-crossing outage rather than every individual failed ping.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,6 +39,7 @@ public class PingService {
 
     private final MonitorRepository monitorRepository;
     private final PingResultRepository pingResultRepository;
+    private final IncidentRepository incidentRepository;
     private final RestTemplate restTemplate = createRestTemplateWithTimeouts();
 
     private static RestTemplate createRestTemplateWithTimeouts() {
@@ -82,10 +88,12 @@ public class PingService {
                 .build();
 
         pingResultRepository.save(pingResult);
-        updateMonitorStatus(monitor, isUp);
+        updateMonitorStatus(monitor, isUp, errorMessage);
     }
 
-    private void updateMonitorStatus(Monitor monitor, boolean isUp) {
+    private void updateMonitorStatus(Monitor monitor, boolean isUp, String errorMessage) {
+        MonitorStatus previousStatus = monitor.getCurrentStatus();
+
         if (isUp) {
             monitor.setConsecutiveFailures(0);
             monitor.setCurrentStatus(MonitorStatus.UP);
@@ -97,5 +105,34 @@ public class PingService {
         }
 
         monitorRepository.save(monitor);
+        handleIncidentLifecycle(monitor, previousStatus, errorMessage);
+    }
+
+/**
+ * Creates an Incident the moment a monitor first transitions into DOWN, and resolves the open Incident the moment it transitions back to UP.
+ * Uses previousStatus vs the newly-set currentStatus to detect the transition itself, rather than reacting to every DOWN ping.
+ */
+    private void handleIncidentLifecycle(Monitor monitor, MonitorStatus previousStatus, String errorMessage) {
+        boolean justWentDown = previousStatus != MonitorStatus.DOWN && monitor.getCurrentStatus() == MonitorStatus.DOWN;
+        boolean justRecovered = previousStatus == MonitorStatus.DOWN && monitor.getCurrentStatus() == MonitorStatus.UP;
+
+        if (justWentDown) {
+            Incident incident = Incident.builder()
+                    .monitorId(monitor.getId())
+                    .startedAt(LocalDateTime.now())
+                    .cause(errorMessage != null ? errorMessage : "Unexpected response status")
+                    .build();
+            incidentRepository.save(incident);
+            log.warn("Incident opened for monitor {}: {}", monitor.getId(), incident.getCause());
+        }
+
+        if (justRecovered) {
+            incidentRepository.findByMonitorIdAndResolvedAtIsNull(monitor.getId())
+                    .ifPresent(incident -> {
+                        incident.setResolvedAt(LocalDateTime.now());
+                        incidentRepository.save(incident);
+                        log.info("Incident resolved for monitor {}", monitor.getId());
+                    });
+        }
     }
 }
