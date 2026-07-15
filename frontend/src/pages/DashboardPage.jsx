@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
 import { getMonitors, createMonitor, deleteMonitor } from '../api/monitorApi'
 
@@ -9,9 +10,9 @@ const statusColors = {
 }
 
 /**
- * Main dashboard, shown after login. Fetches the logged-in user's monitors on mount, and provides a form to create new ones plus
- * a delete action per monitor. Status dot color reflects currentStatus as last updated by the backend's scheduled PingService. A legend clarifies what each 
- * color means; UNKNOWN monitors show a "checking" indicator instead of an ambiguous dot color.
+ * Main dashboard, shown after login. Fetches the logged-in user's monitors on mount, and provides a form to create new ones plus a delete action per monitor. 
+ * Status dot color reflects currentStatus as last updated by the backend's scheduled PingService. A legend clarifies what each color means; UNKNOWN monitors 
+ * show a "checking" indicator instead of an ambiguous dot color. Each row links to the monitor's detail page with analytics.
  */
 export default function DashboardPage() {
   const { user, token, logout } = useAuth()
@@ -186,9 +187,10 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-3">
           {monitors.map((monitor) => (
-            <div
+            <Link
               key={monitor.id}
-              className="bg-slate-800 rounded-lg p-4 flex items-center justify-between"
+              to={`/monitors/${monitor.id}`}
+              className="bg-slate-800 hover:bg-slate-750 rounded-lg p-4 flex items-center justify-between transition"
             >
               <div className="flex items-center gap-3">
                 {monitor.currentStatus === 'UNKNOWN' ? (
@@ -210,13 +212,17 @@ export default function DashboardPage() {
                   {monitor.method} · expects {monitor.expectedStatusCode}
                 </span>
                 <button
-                  onClick={() => handleDelete(monitor.id)}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleDelete(monitor.id)
+                  }}
                   className="text-red-400 hover:text-red-300 text-sm transition"
                 >
                   Delete
                 </button>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
