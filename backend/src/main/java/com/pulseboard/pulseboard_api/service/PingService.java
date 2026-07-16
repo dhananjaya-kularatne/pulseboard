@@ -1,5 +1,6 @@
 package com.pulseboard.pulseboard_api.service;
 
+import com.pulseboard.pulseboard_api.dto.MonitorStatusUpdate;
 import com.pulseboard.pulseboard_api.model.Incident;
 import com.pulseboard.pulseboard_api.model.Monitor;
 import com.pulseboard.pulseboard_api.model.MonitorStatus;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -41,6 +43,7 @@ public class PingService {
     private final MonitorRepository monitorRepository;
     private final PingResultRepository pingResultRepository;
     private final IncidentRepository incidentRepository;
+    private final SimpMessagingTemplate messagingTemplate;
     private final RestTemplate restTemplate = createRestTemplateWithTimeouts();
     private final java.util.concurrent.ExecutorService pingExecutor = java.util.concurrent.Executors.newFixedThreadPool(10);
 
@@ -122,7 +125,26 @@ public class PingService {
 
     monitorRepository.save(freshMonitor);
     handleIncidentLifecycle(freshMonitor, previousStatus, errorMessage);
+    broadcastStatusChangeIfNeeded(freshMonitor, previousStatus);
 }
+
+    /**
+     * Pushes a status update over WebSocket only when the status actually
+     * changed — not on every ping — so connected clients get instant updates
+     * without the frontend needing to poll or the server spamming messages
+     * for monitors that are steadily UP.
+     */
+    private void broadcastStatusChangeIfNeeded(Monitor monitor, MonitorStatus previousStatus) {
+        if (previousStatus != monitor.getCurrentStatus()) {
+            MonitorStatusUpdate update = MonitorStatusUpdate.builder()
+                    .monitorId(monitor.getId())
+                    .status(monitor.getCurrentStatus())
+                    .build();
+            messagingTemplate.convertAndSend("/topic/monitors", update);
+            log.info("Broadcast status change for monitor {}: {} -> {}",
+                    monitor.getId(), previousStatus, monitor.getCurrentStatus());
+        }
+    }
 
 /**
  * Creates an Incident the moment a monitor first transitions into DOWN, and resolves the open Incident the moment it transitions back to UP.
