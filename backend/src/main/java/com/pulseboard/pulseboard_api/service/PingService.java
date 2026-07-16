@@ -19,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Scheduled background job that pings every active Monitor on a fixed global interval (rather than per-monitor intervals, which would need
@@ -41,6 +42,7 @@ public class PingService {
     private final PingResultRepository pingResultRepository;
     private final IncidentRepository incidentRepository;
     private final RestTemplate restTemplate = createRestTemplateWithTimeouts();
+    private final java.util.concurrent.ExecutorService pingExecutor = java.util.concurrent.Executors.newFixedThreadPool(10);
 
     private static RestTemplate createRestTemplateWithTimeouts() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -54,9 +56,15 @@ public class PingService {
         List<Monitor> activeMonitors = monitorRepository.findByIsActiveTrue();
         log.info("Running scheduled ping for {} active monitor(s)", activeMonitors.size());
 
-        for (Monitor monitor : activeMonitors) {
-            pingMonitor(monitor);
-        }
+        List<CompletableFuture<Void>> futures = activeMonitors.stream()
+                .map(monitor -> CompletableFuture.runAsync(() -> pingMonitor(monitor), pingExecutor))
+                .toList();
+
+        // Wait for all pings in this batch to finish before the next scheduled
+        // run starts, but since they run concurrently, the batch as a whole
+        // takes roughly as long as the slowest single ping — not the sum of all
+        // of them, which is what caused multi-minute delays with many monitors.
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
     }
 
     private void pingMonitor(Monitor monitor) {
