@@ -92,21 +92,29 @@ public class PingService {
     }
 
     private void updateMonitorStatus(Monitor monitor, boolean isUp, String errorMessage) {
-        MonitorStatus previousStatus = monitor.getCurrentStatus();
-
-        if (isUp) {
-            monitor.setConsecutiveFailures(0);
-            monitor.setCurrentStatus(MonitorStatus.UP);
-        } else {
-            monitor.setConsecutiveFailures(monitor.getConsecutiveFailures() + 1);
-            if (monitor.getConsecutiveFailures() >= FAILURE_THRESHOLD) {
-                monitor.setCurrentStatus(MonitorStatus.DOWN);
-            }
-        }
-
-        monitorRepository.save(monitor);
-        handleIncidentLifecycle(monitor, previousStatus, errorMessage);
+    // Re-fetch fresh from DB in case the monitor was updated (e.g. via the
+    // API) since this batch run started — prevents overwriting those changes with the stale copy loaded at the start of pingAllActiveMonitors.
+    Monitor freshMonitor = monitorRepository.findById(monitor.getId()).orElse(null);
+    if (freshMonitor == null) {
+        // Monitor was deleted while this batch run was in progress; nothing to update.
+        return;
     }
+
+    MonitorStatus previousStatus = freshMonitor.getCurrentStatus();
+
+    if (isUp) {
+        freshMonitor.setConsecutiveFailures(0);
+        freshMonitor.setCurrentStatus(MonitorStatus.UP);
+    } else {
+        freshMonitor.setConsecutiveFailures(freshMonitor.getConsecutiveFailures() + 1);
+        if (freshMonitor.getConsecutiveFailures() >= FAILURE_THRESHOLD) {
+            freshMonitor.setCurrentStatus(MonitorStatus.DOWN);
+        }
+    }
+
+    monitorRepository.save(freshMonitor);
+    handleIncidentLifecycle(freshMonitor, previousStatus, errorMessage);
+}
 
 /**
  * Creates an Incident the moment a monitor first transitions into DOWN, and resolves the open Incident the moment it transitions back to UP.
