@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { useAuth } from '../hooks/AuthContext'
 import { getMonitorAnalytics } from '../api/analyticsApi'
+import { getMonitorIncidents } from '../api/incidentApi'
 
 const TIME_WINDOWS = [
   { label: '24h', hours: 24 },
@@ -21,6 +22,7 @@ const TIME_WINDOWS = [
 /**
  * Detail view for a single monitor. Shows uptime %, average/P95 response time, and a chart of response time over the selected time window.
  * Data comes from the backend's aggregation-pipeline-powered analytics endpoint, recomputed on demand whenever the window changes.
+ * Also shows incident history — past outages with start/resolve times and duration.
  */
 export default function MonitorDetailPage() {
   const { id } = useParams()
@@ -30,6 +32,7 @@ export default function MonitorDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedHours, setSelectedHours] = useState(24)
+  const [incidents, setIncidents] = useState([])
 
   useEffect(() => {
     setLoading(true)
@@ -38,6 +41,12 @@ export default function MonitorDetailPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [id, selectedHours])
+
+  useEffect(() => {
+    getMonitorIncidents(token, id)
+      .then(setIncidents)
+      .catch((err) => setError(err.message))
+  }, [id])
 
   // Recharts expects a simple label field for the X axis; trim the
   // ISO timestamp down to just hours:minutes for readability
@@ -111,8 +120,46 @@ export default function MonitorDetailPage() {
               </ResponsiveContainer>
             )}
           </div>
+
+          <div className="bg-slate-800 rounded-lg p-6 mt-6">
+            <h2 className="text-sm font-medium text-slate-300 mb-4">Incident history</h2>
+            {incidents.length === 0 ? (
+              <p className="text-slate-500 text-sm">No incidents recorded.</p>
+            ) : (
+              <div className="space-y-2">
+                {incidents.map((incident) => (
+                  <IncidentRow key={incident.id} incident={incident} />
+                ))}
+              </div>
+            )}
+          </div>
         </>
       ) : null}
+    </div>
+  )
+}
+
+function IncidentRow({ incident }) {
+  const isOngoing = incident.resolvedAt === null
+  const started = new Date(incident.startedAt)
+  const resolved = isOngoing ? null : new Date(incident.resolvedAt)
+  const durationMinutes = isOngoing
+    ? null
+    : Math.round((resolved - started) / 60000)
+
+  return (
+    <div className="flex items-center justify-between text-sm bg-slate-900 rounded-md px-4 py-3">
+      <div>
+        <p className="text-slate-200">{incident.cause}</p>
+        <p className="text-slate-500 text-xs mt-0.5">
+          Started {started.toLocaleString()}
+        </p>
+      </div>
+      {isOngoing ? (
+        <span className="text-red-400 text-xs font-medium">Ongoing</span>
+      ) : (
+        <span className="text-slate-400 text-xs">{durationMinutes} min</span>
+      )}
     </div>
   )
 }
