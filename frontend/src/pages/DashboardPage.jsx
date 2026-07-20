@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
+import { useMonitorUpdates } from '../hooks/useMonitorUpdates'
 import { getMonitors, createMonitor, deleteMonitor } from '../api/monitorApi'
 
 // Maps backend MonitorStatus enum values to Tailwind color classes
@@ -37,6 +38,18 @@ export default function DashboardPage() {
       setLoading(false)
     }
   }
+
+  const handleStatusUpdate = useCallback((update) => {
+    setMonitors((prevMonitors) =>
+      prevMonitors.map((monitor) =>
+        monitor.id === update.monitorId
+          ? { ...monitor, currentStatus: update.status }
+          : monitor
+      )
+    )
+  }, [])
+
+  useMonitorUpdates(handleStatusUpdate)
 
   useEffect(() => {
     loadMonitors()
